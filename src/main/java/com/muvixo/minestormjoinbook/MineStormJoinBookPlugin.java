@@ -39,12 +39,8 @@ import org.bukkit.plugin.java.JavaPlugin;
 public final class MineStormJoinBookPlugin extends JavaPlugin implements Listener {
 
     private static final int ENTRIES_PER_PAGE = 8;
-
     private final Set<UUID> seen = new HashSet<UUID>();
-
     private File dataFile;
-    private File messagesFile;
-    private File guiFile;
     private FileConfiguration messages;
     private FileConfiguration gui;
 
@@ -68,10 +64,7 @@ public final class MineStormJoinBookPlugin extends JavaPlugin implements Listene
 
     private void saveResourceIfMissing(String name) {
         File f = new File(getDataFolder(), name);
-        if (!f.exists()) {
-            f.getParentFile().mkdirs();
-            saveResource(name, false);
-        }
+        if (!f.exists()) { f.getParentFile().mkdirs(); saveResource(name, false); }
     }
 
     private FileConfiguration loadYaml(File file) {
@@ -83,9 +76,9 @@ public final class MineStormJoinBookPlugin extends JavaPlugin implements Listene
     }
 
     private void loadMessages() {
-        this.messagesFile = new File(getDataFolder(), "messages.yml");
-        if (!messagesFile.exists()) saveResourceIfMissing("messages.yml");
-        this.messages = loadYaml(messagesFile);
+        File f = new File(getDataFolder(), "messages.yml");
+        if (!f.exists()) saveResourceIfMissing("messages.yml");
+        this.messages = loadYaml(f);
         InputStream def = getResource("messages.yml");
         if (def != null) {
             this.messages.setDefaults(YamlConfiguration.loadConfiguration(
@@ -94,9 +87,9 @@ public final class MineStormJoinBookPlugin extends JavaPlugin implements Listene
     }
 
     private void loadGui() {
-        this.guiFile = new File(getDataFolder(), "gui.yml");
-        if (!guiFile.exists()) saveResourceIfMissing("gui.yml");
-        this.gui = loadYaml(guiFile);
+        File f = new File(getDataFolder(), "gui.yml");
+        if (!f.exists()) saveResourceIfMissing("gui.yml");
+        this.gui = loadYaml(f);
         InputStream def = getResource("gui.yml");
         if (def != null) {
             this.gui.setDefaults(YamlConfiguration.loadConfiguration(
@@ -126,12 +119,9 @@ public final class MineStormJoinBookPlugin extends JavaPlugin implements Listene
     public void onJoin(final PlayerJoinEvent event) {
         final Player player = event.getPlayer();
         if (getConfig().getBoolean("respect-see-permission", true)
-                && !hasPerm(player, "minestormjoinbook.see")) {
-            return;
-        }
+                && !hasPerm(player, "minestormjoinbook.see")) return;
         final boolean onlyOnce = getConfig().getBoolean("only-once", false);
         if (onlyOnce && this.seen.contains(player.getUniqueId())) return;
-
         long delay = Math.max(1L, getConfig().getLong("open-delay-ticks", 20L));
         getServer().getScheduler().runTaskLater((Plugin) this, new Runnable() {
             public void run() {
@@ -149,7 +139,6 @@ public final class MineStormJoinBookPlugin extends JavaPlugin implements Listene
     public boolean onCommand(CommandSender sender, Command cmd, String label, String[] args) {
         if (args.length == 0) { sendHelp(sender); return true; }
         String sub = args[0].toLowerCase();
-
         if (sub.equals("help")) { sendHelp(sender); return true; }
 
         if (sub.equals("creator")) {
@@ -157,21 +146,16 @@ public final class MineStormJoinBookPlugin extends JavaPlugin implements Listene
             msg(sender, "creator", null, null);
             return true;
         }
-
         if (sub.equals("reload")) {
             if (!requirePerm(sender, "minestormjoinbook.reload")) return true;
             try {
-                reloadConfig();
-                loadMessages();
-                loadGui();
+                reloadConfig(); loadMessages(); loadGui();
                 msg(sender, "reload-success", null, null);
             } catch (Exception e) {
-                msg(sender, "reload-failed", "%error%",
-                        e.getMessage() == null ? "unknown" : e.getMessage());
+                msg(sender, "reload-failed", "%error%", e.getMessage() == null ? "unknown" : e.getMessage());
             }
             return true;
         }
-
         if (sub.equals("open")) {
             if (args.length >= 2) {
                 if (!requirePerm(sender, "minestormjoinbook.open.other")) return true;
@@ -181,9 +165,7 @@ public final class MineStormJoinBookPlugin extends JavaPlugin implements Listene
                     openBook(target);
                     msg(sender, "open-other", "%player%", target.getName());
                     msg(target, "open-target", null, null);
-                } catch (Exception e) {
-                    msg(sender, "open-failed", "%player%", target.getName());
-                }
+                } catch (Exception e) { msg(sender, "open-failed", "%player%", target.getName()); }
                 return true;
             }
             if (!(sender instanceof Player)) { msg(sender, "player-only", null, null); return true; }
@@ -191,12 +173,9 @@ public final class MineStormJoinBookPlugin extends JavaPlugin implements Listene
             try {
                 openBook((Player) sender);
                 msg(sender, "open-self", null, null);
-            } catch (Exception e) {
-                msg(sender, "open-failed", "%player%", sender.getName());
-            }
+            } catch (Exception e) { msg(sender, "open-failed", "%player%", sender.getName()); }
             return true;
         }
-
         if (sub.equals("reset")) {
             if (!requirePerm(sender, "minestormjoinbook.reset")) return true;
             if (args.length < 2) { msg(sender, "invalid-usage", "%usage%", msgRaw("usage-reset")); return true; }
@@ -209,7 +188,6 @@ public final class MineStormJoinBookPlugin extends JavaPlugin implements Listene
             }
             return true;
         }
-
         if (sub.equals("resetall")) {
             if (!requirePerm(sender, "minestormjoinbook.resetall")) return true;
             int count = this.seen.size();
@@ -219,7 +197,6 @@ public final class MineStormJoinBookPlugin extends JavaPlugin implements Listene
             msg(sender, "resetall-success", "%count%", String.valueOf(count));
             return true;
         }
-
         if (sub.equals("list")) {
             if (!requirePerm(sender, "minestormjoinbook.list")) return true;
             if (this.seen.isEmpty()) { msg(sender, "list-empty", null, null); return true; }
@@ -231,7 +208,6 @@ public final class MineStormJoinBookPlugin extends JavaPlugin implements Listene
             }
             return true;
         }
-
         if (sub.equals("info")) {
             if (!requirePerm(sender, "minestormjoinbook.info")) return true;
             msg(sender, "info-header", "%version%", getDescription().getVersion());
@@ -242,7 +218,6 @@ public final class MineStormJoinBookPlugin extends JavaPlugin implements Listene
             msg(sender, "info-delay", "%delay%", String.valueOf(getConfig().getLong("open-delay-ticks", 20L)));
             return true;
         }
-
         msg(sender, "unknown-command", null, null);
         return true;
     }
@@ -283,12 +258,10 @@ public final class MineStormJoinBookPlugin extends JavaPlugin implements Listene
     private org.bukkit.inventory.ItemStack buildBook() {
         NBTTagList pages = new NBTTagList();
         for (String page : buildPages()) pages.add((NBTBase) new NBTTagString(page));
-
         NBTTagCompound tag = new NBTTagCompound();
         tag.setString("title", color(gui.getString("book.title", "&6Gamemodes")));
         tag.setString("author", color(gui.getString("book.author", "Server")));
         tag.set("pages", (NBTBase) pages);
-
         ItemStack nms = CraftItemStack.asNMSCopy(new org.bukkit.inventory.ItemStack(Material.WRITTEN_BOOK));
         nms.setTag(tag);
         return CraftItemStack.asBukkitCopy(nms);
@@ -298,7 +271,6 @@ public final class MineStormJoinBookPlugin extends JavaPlugin implements Listene
         String header = color(gui.getString("book.header", "&6&lWELCOME"));
         String subtitle = color(gui.getString("book.subtitle", "&7Choose a gamemode:"));
         String format = gui.getString("book.button-format", "&0&r%display%");
-
         List<String> buttons = new ArrayList<String>();
         ConfigurationSection modes = gui.getConfigurationSection("gamemodes");
         if (modes != null) {
@@ -314,21 +286,18 @@ public final class MineStormJoinBookPlugin extends JavaPlugin implements Listene
                 buttons.add(button(text, command, hover));
             }
         }
-
         List<String> pages = new ArrayList<String>();
-        int perPage = ENTRIES_PER_PAGE;
-        int total = Math.max(1, (buttons.size() + perPage - 1) / perPage);
+        int total = Math.max(1, (buttons.size() + ENTRIES_PER_PAGE - 1) / ENTRIES_PER_PAGE);
         for (int p = 0; p < total; p++) {
             StringBuilder sb = new StringBuilder("[\"\"");
             if (p == 0) {
                 sb.append(",{\"text\":\"").append(esc(header + "\n")).append("\"}");
                 sb.append(",{\"text\":\"").append(esc(subtitle + "\n\n")).append("\"}");
             }
-            int from = p * perPage;
-            int to = Math.min(buttons.size(), from + perPage);
-            if (buttons.isEmpty()) {
+            int from = p * ENTRIES_PER_PAGE;
+            int to = Math.min(buttons.size(), from + ENTRIES_PER_PAGE);
+            if (buttons.isEmpty())
                 sb.append(",{\"text\":\"").append(esc("&cNo gamemodes configured.")).append("\"}");
-            }
             for (int i = from; i < to; i++) {
                 sb.append(",").append(buttons.get(i));
                 sb.append(",{\"text\":\"\\n\"}");
@@ -344,10 +313,9 @@ public final class MineStormJoinBookPlugin extends JavaPlugin implements Listene
         sb.append("{\"text\":\"").append(esc(text)).append("\"");
         sb.append(",\"clickEvent\":{\"action\":\"run_command\",\"value\":\"")
                 .append(esc(command)).append("\"}");
-        if (hover != null && !hover.isEmpty()) {
+        if (hover != null && !hover.isEmpty())
             sb.append(",\"hoverEvent\":{\"action\":\"show_text\",\"value\":\"")
                     .append(esc(hover)).append("\"}");
-        }
         sb.append("}");
         return sb.toString();
     }
@@ -380,9 +348,7 @@ public final class MineStormJoinBookPlugin extends JavaPlugin implements Listene
         sender.sendMessage(color(raw));
     }
 
-    private String msgRaw(String key) {
-        return messages.getString(key, "");
-    }
+    private String msgRaw(String key) { return messages.getString(key, ""); }
 
     private static String color(String s) {
         if (s == null) return "";

@@ -15,27 +15,8 @@
         <maven.compiler.target>1.8</maven.compiler.target>
     </properties>
 
-    <repositories>
-        <!-- Prebuilt Spigot jars (1.8.8 etc.) not available on hub.spigotmc.org -->
-        <repository>
-            <id>minebench</id>
-            <url>https://repo.minebench.dev/</url>
-        </repository>
-        <repository>
-            <id>neylz</id>
-            <url>https://repo.neylz.dev/</url>
-        </repository>
-        <repository>
-            <id>codemc</id>
-            <url>https://repo.codemc.io/repository/maven-public/</url>
-        </repository>
-        <repository>
-            <id>spigot-repo</id>
-            <url>https://hub.spigotmc.org/nexus/content/repositories/snapshots/</url>
-        </repository>
-    </repositories>
-
     <dependencies>
+        <!-- Installed by BuildTools in CI (or locally) into ~/.m2 -->
         <dependency>
             <groupId>org.spigotmc</groupId>
             <artifactId>spigot</artifactId>

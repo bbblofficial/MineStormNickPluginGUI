@@ -2,32 +2,37 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-fixer.py - Patch an existing MineStormJoinBook project so it builds on
-GitHub Actions for JDK 8/17/21/25.
+fixer.py — Rebuild MineStormJoinBook to work with a CI that uses BuildTools
+===========================================================================
 
-WHAT IT FIXES
--------------
-* Spigot 1.8.8 dependency not found (the official Spigot repo does NOT host
-  prebuilt 1.8.8 jars; you must either build them with BuildTools or use a
-  community mirror). This script switches to the community mirror
-  `repo.minebench.dev`, which does host 1.8.8-R0.1-SNAPSHOT.
-* Adds `messages.yml`, `gui.yml`, `config.yml`, `plugin.yml`.
-* Adds a full Java source file with admin commands, LuckPerms-friendly
-  permissions, OP full-perm bypass, /msjb creator -> "Created by Muvixo".
-* Adds GitHub Actions workflow building on JDK 8, 17, 21, 25.
-* Adds README, .gitignore.
+WHY
+---
+Spigot does NOT publish prebuilt 1.8.8 jars on their public Nexus, and the
+community mirrors we tried (minebench, neylz) are NOT resolvable from
+GitHub-hosted runners ("Name or service not known").
 
-USAGE
------
-    python fixer.py
+SOLUTION
+--------
+Build Spigot 1.8.8 locally with BuildTools inside the GitHub Actions job,
+install it into the local Maven repo, and depend on it as `provided`.
+This is the standard, 100%-offline-after-cache way to compile a 1.8.8
+NMS plugin on CI.
+
+WHAT THIS SCRIPT DOES
+---------------------
+1. Rewrites `pom.xml` to:
+   - Not declare any custom repositories for spigot (only Maven Central).
+   - Depend on `org.spigotmc:spigot:1.8.8-R0.1-SNAPSHOT` (installed by CI).
+2. Rewrites `.github/workflows/build.yml` to:
+   - Run once with JDK 8 to build Spigot 1.8.8 via BuildTools.
+   - Cache the built jar in ~/.m2 between runs.
+   - Build the plugin on JDK 8 / 17 / 21 / 25 using that cached Spigot.
+3. Re-writes all resources and Java source with the full feature set.
 """
 
 import os
-import sys
+import shutil
 
-# ------------------------------------------------------------
-# Project layout (edit if your project root differs)
-# ------------------------------------------------------------
 ROOT = "."
 PACKAGE = "com.muvixo.minestormjoinbook"
 PACKAGE_PATH = PACKAGE.replace(".", "/")
@@ -35,9 +40,9 @@ SRC = os.path.join("src", "main", "java", PACKAGE_PATH)
 RES = os.path.join("src", "main", "resources")
 WF = os.path.join(".github", "workflows")
 
-# ------------------------------------------------------------
-# pom.xml - using community mirror repo.minebench.dev
-# ------------------------------------------------------------
+# ============================================================
+# pom.xml (no custom repos for Spigot — CI installs it locally)
+# ============================================================
 POM_XML = """<?xml version="1.0" encoding="UTF-8"?>
 <project xmlns="http://maven.apache.org/POM/4.0.0"
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
@@ -55,27 +60,8 @@ POM_XML = """<?xml version="1.0" encoding="UTF-8"?>
         <maven.compiler.target>1.8</maven.compiler.target>
     </properties>
 
-    <repositories>
-        <!-- Prebuilt Spigot jars (1.8.8 etc.) not available on hub.spigotmc.org -->
-        <repository>
-            <id>minebench</id>
-            <url>https://repo.minebench.dev/</url>
-        </repository>
-        <repository>
-            <id>neylz</id>
-            <url>https://repo.neylz.dev/</url>
-        </repository>
-        <repository>
-            <id>codemc</id>
-            <url>https://repo.codemc.io/repository/maven-public/</url>
-        </repository>
-        <repository>
-            <id>spigot-repo</id>
-            <url>https://hub.spigotmc.org/nexus/content/repositories/snapshots/</url>
-        </repository>
-    </repositories>
-
     <dependencies>
+        <!-- Installed by BuildTools in CI (or locally) into ~/.m2 -->
         <dependency>
             <groupId>org.spigotmc</groupId>
             <artifactId>spigot</artifactId>
@@ -119,9 +105,9 @@ POM_XML = """<?xml version="1.0" encoding="UTF-8"?>
 </project>
 """
 
-# ------------------------------------------------------------
+# ============================================================
 # plugin.yml
-# ------------------------------------------------------------
+# ============================================================
 PLUGIN_YML = """name: MineStormJoinBook
 version: 1.0.0
 main: com.muvixo.minestormjoinbook.MineStormJoinBookPlugin
@@ -135,7 +121,7 @@ commands:
     aliases: [msjb, joinbook]
 permissions:
   minestormjoinbook.admin:
-    description: Full admin access (all subcommands)
+    description: Full admin access
     default: op
     children:
       minestormjoinbook.reload: true
@@ -146,91 +132,57 @@ permissions:
       minestormjoinbook.list: true
       minestormjoinbook.info: true
       minestormjoinbook.creator: true
-  minestormjoinbook.reload:
-    default: op
-  minestormjoinbook.open:
-    default: true
-  minestormjoinbook.open.other:
-    default: op
-  minestormjoinbook.reset:
-    default: op
-  minestormjoinbook.resetall:
-    default: op
-  minestormjoinbook.list:
-    default: op
-  minestormjoinbook.info:
-    default: true
-  minestormjoinbook.creator:
-    default: true
-  minestormjoinbook.see:
-    description: Player receives the join book
-    default: true
+  minestormjoinbook.reload: { default: op }
+  minestormjoinbook.open: { default: true }
+  minestormjoinbook.open.other: { default: op }
+  minestormjoinbook.reset: { default: op }
+  minestormjoinbook.resetall: { default: op }
+  minestormjoinbook.list: { default: op }
+  minestormjoinbook.info: { default: true }
+  minestormjoinbook.creator: { default: true }
+  minestormjoinbook.see: { default: true }
 """
 
-# ------------------------------------------------------------
+# ============================================================
 # config.yml
-# ------------------------------------------------------------
-CONFIG_YML = """# MineStormJoinBook main configuration
-# Behavior only. Text is in messages.yml and gui.yml.
-
-# false = show on every join; true = show only once per player
-only-once: false
-
-# Delay in ticks before opening. 20 ticks = 1 second
+# ============================================================
+CONFIG_YML = """only-once: false
 open-delay-ticks: 20
-
-# Sound on open. "" disables. 1.8 example: ITEM_BOOK_PAGE_TURN
 open-sound: "ITEM_BOOK_PAGE_TURN"
-
-# Manual /msjb open ignores only-once
 manual-open-ignores-once: true
-
-# Hide book from players without minestormjoinbook.see
 respect-see-permission: true
 """
 
-# ------------------------------------------------------------
+# ============================================================
 # messages.yml
-# ------------------------------------------------------------
-MESSAGES_YML = """# MineStormJoinBook messages
-# Placeholders: %player% %sender% %count% %prefix% %version% %author% %error%
-
-prefix: "&8[&6MineStorm&8] &r"
-
+# ============================================================
+MESSAGES_YML = """prefix: "&8[&6MineStorm&8] &r"
 no-permission: "%prefix%&cYou don't have permission."
 player-only: "%prefix%&cOnly players can use this."
 player-not-found: "%prefix%&cPlayer &e%player% &cnot found."
 unknown-command: "%prefix%&cUnknown subcommand. Try &e/msjb help&c."
 invalid-usage: "%prefix%&cUsage: &e%usage%"
-
 reload-success: "%prefix%&aConfiguration reloaded."
 reload-failed: "%prefix%&cReload failed: &e%error%"
-
 open-self: "%prefix%&aOpening the book GUI..."
 open-other: "%prefix%&aOpened the book for &e%player%&a."
 open-target: "%prefix%&aA book GUI was opened for you."
 open-failed: "%prefix%&cCould not open the book for &e%player%&c."
-
 reset-success: "%prefix%&e%player% &awill see the book again."
 reset-not-seen: "%prefix%&e%player% &ehas not seen it yet."
 resetall-success: "%prefix%&aReset &e%count% &aplayer(s)."
 resetall-empty: "%prefix%&eNo players to reset."
-
 list-header: "%prefix%&6Seen (&e%count%&6):"
 list-entry: "&8 - &e%player%"
 list-empty: "%prefix%&eNobody has seen the book yet."
-
 info-header: "%prefix%&6MineStormJoinBook &7v%version%"
 info-line: "&7Author: &e%author%"
 info-seen: "&7Tracked: &e%count%"
 info-once: "&7Only once: &e%once%"
 info-delay: "&7Delay: &e%delay% &7ticks"
-
 creator: "%prefix%&6Created by &e&lMuvixo"
-
 help-header: "%prefix%&6MineStormJoinBook commands:"
 help-line: "&e%usage% &7- %description%"
-
 usage-reload: "/msjb reload"
 usage-open: "/msjb open [player]"
 usage-reset: "/msjb reset <player>"
@@ -239,7 +191,6 @@ usage-list: "/msjb list"
 usage-info: "/msjb info"
 usage-creator: "/msjb creator"
 usage-help: "/msjb help"
-
 desc-reload: "Reload config, messages.yml and gui.yml"
 desc-open: "Open the book GUI (self or others)"
 desc-reset: "Reset a player"
@@ -250,12 +201,10 @@ desc-creator: "Show the plugin creator"
 desc-help: "Show this help"
 """
 
-# ------------------------------------------------------------
+# ============================================================
 # gui.yml
-# ------------------------------------------------------------
-GUI_YML = """# MineStormJoinBook GUI (written book) configuration
-
-book:
+# ============================================================
+GUI_YML = """book:
   title: "&6Gamemodes"
   author: "Server"
   header: "&6&lWELCOME"
@@ -266,48 +215,48 @@ gamemodes:
   survival:
     display: "&a&lSurvival"
     command: "server survival"
-    hover: "&7Join the &aSurvival &7server!"
+    hover: "&7Join &aSurvival&7!"
   skyblock:
     display: "&b&lSkyblock"
     command: "server skyblock"
-    hover: "&7Join the &bSkyblock &7server!"
+    hover: "&7Join &bSkyblock&7!"
   creative:
     display: "&e&lCreative"
     command: "server creative"
-    hover: "&7Join the &eCreative &7server!"
+    hover: "&7Join &eCreative&7!"
   pvp:
     display: "&c&lPvP Arena"
     command: "server pvp"
-    hover: "&7Join the &cPvP Arena &7server!"
+    hover: "&7Join &cPvP&7!"
   minigames:
     display: "&d&lMinigames"
     command: "server minigames"
-    hover: "&7Join the &dMinigames &7server!"
+    hover: "&7Join &dMinigames&7!"
   parkour:
     display: "&6&lParkour"
     command: "server parkour"
-    hover: "&7Join the &6Parkour &7server!"
+    hover: "&7Join &6Parkour&7!"
   factions:
     display: "&4&lFactions"
     command: "server factions"
-    hover: "&7Join the &4Factions &7server!"
+    hover: "&7Join &4Factions&7!"
   prison:
     display: "&8&lPrison"
     command: "server prison"
-    hover: "&7Join the &8Prison &7server!"
+    hover: "&7Join &8Prison&7!"
   bedwars:
     display: "&5&lBedWars"
     command: "server bedwars"
-    hover: "&7Join the &5BedWars &7server!"
+    hover: "&7Join &5BedWars&7!"
   skywars:
     display: "&9&lSkyWars"
     command: "server skywars"
-    hover: "&7Join the &9SkyWars &7server!"
+    hover: "&7Join &9SkyWars&7!"
 """
 
-# ------------------------------------------------------------
+# ============================================================
 # Java source
-# ------------------------------------------------------------
+# ============================================================
 JAVA_SRC = r'''package com.muvixo.minestormjoinbook;
 
 import io.netty.buffer.Unpooled;
@@ -349,12 +298,8 @@ import org.bukkit.plugin.java.JavaPlugin;
 public final class MineStormJoinBookPlugin extends JavaPlugin implements Listener {
 
     private static final int ENTRIES_PER_PAGE = 8;
-
     private final Set<UUID> seen = new HashSet<UUID>();
-
     private File dataFile;
-    private File messagesFile;
-    private File guiFile;
     private FileConfiguration messages;
     private FileConfiguration gui;
 
@@ -378,10 +323,7 @@ public final class MineStormJoinBookPlugin extends JavaPlugin implements Listene
 
     private void saveResourceIfMissing(String name) {
         File f = new File(getDataFolder(), name);
-        if (!f.exists()) {
-            f.getParentFile().mkdirs();
-            saveResource(name, false);
-        }
+        if (!f.exists()) { f.getParentFile().mkdirs(); saveResource(name, false); }
     }
 
     private FileConfiguration loadYaml(File file) {
@@ -393,9 +335,9 @@ public final class MineStormJoinBookPlugin extends JavaPlugin implements Listene
     }
 
     private void loadMessages() {
-        this.messagesFile = new File(getDataFolder(), "messages.yml");
-        if (!messagesFile.exists()) saveResourceIfMissing("messages.yml");
-        this.messages = loadYaml(messagesFile);
+        File f = new File(getDataFolder(), "messages.yml");
+        if (!f.exists()) saveResourceIfMissing("messages.yml");
+        this.messages = loadYaml(f);
         InputStream def = getResource("messages.yml");
         if (def != null) {
             this.messages.setDefaults(YamlConfiguration.loadConfiguration(
@@ -404,9 +346,9 @@ public final class MineStormJoinBookPlugin extends JavaPlugin implements Listene
     }
 
     private void loadGui() {
-        this.guiFile = new File(getDataFolder(), "gui.yml");
-        if (!guiFile.exists()) saveResourceIfMissing("gui.yml");
-        this.gui = loadYaml(guiFile);
+        File f = new File(getDataFolder(), "gui.yml");
+        if (!f.exists()) saveResourceIfMissing("gui.yml");
+        this.gui = loadYaml(f);
         InputStream def = getResource("gui.yml");
         if (def != null) {
             this.gui.setDefaults(YamlConfiguration.loadConfiguration(
@@ -436,12 +378,9 @@ public final class MineStormJoinBookPlugin extends JavaPlugin implements Listene
     public void onJoin(final PlayerJoinEvent event) {
         final Player player = event.getPlayer();
         if (getConfig().getBoolean("respect-see-permission", true)
-                && !hasPerm(player, "minestormjoinbook.see")) {
-            return;
-        }
+                && !hasPerm(player, "minestormjoinbook.see")) return;
         final boolean onlyOnce = getConfig().getBoolean("only-once", false);
         if (onlyOnce && this.seen.contains(player.getUniqueId())) return;
-
         long delay = Math.max(1L, getConfig().getLong("open-delay-ticks", 20L));
         getServer().getScheduler().runTaskLater((Plugin) this, new Runnable() {
             public void run() {
@@ -459,7 +398,6 @@ public final class MineStormJoinBookPlugin extends JavaPlugin implements Listene
     public boolean onCommand(CommandSender sender, Command cmd, String label, String[] args) {
         if (args.length == 0) { sendHelp(sender); return true; }
         String sub = args[0].toLowerCase();
-
         if (sub.equals("help")) { sendHelp(sender); return true; }
 
         if (sub.equals("creator")) {
@@ -467,21 +405,16 @@ public final class MineStormJoinBookPlugin extends JavaPlugin implements Listene
             msg(sender, "creator", null, null);
             return true;
         }
-
         if (sub.equals("reload")) {
             if (!requirePerm(sender, "minestormjoinbook.reload")) return true;
             try {
-                reloadConfig();
-                loadMessages();
-                loadGui();
+                reloadConfig(); loadMessages(); loadGui();
                 msg(sender, "reload-success", null, null);
             } catch (Exception e) {
-                msg(sender, "reload-failed", "%error%",
-                        e.getMessage() == null ? "unknown" : e.getMessage());
+                msg(sender, "reload-failed", "%error%", e.getMessage() == null ? "unknown" : e.getMessage());
             }
             return true;
         }
-
         if (sub.equals("open")) {
             if (args.length >= 2) {
                 if (!requirePerm(sender, "minestormjoinbook.open.other")) return true;
@@ -491,9 +424,7 @@ public final class MineStormJoinBookPlugin extends JavaPlugin implements Listene
                     openBook(target);
                     msg(sender, "open-other", "%player%", target.getName());
                     msg(target, "open-target", null, null);
-                } catch (Exception e) {
-                    msg(sender, "open-failed", "%player%", target.getName());
-                }
+                } catch (Exception e) { msg(sender, "open-failed", "%player%", target.getName()); }
                 return true;
             }
             if (!(sender instanceof Player)) { msg(sender, "player-only", null, null); return true; }
@@ -501,12 +432,9 @@ public final class MineStormJoinBookPlugin extends JavaPlugin implements Listene
             try {
                 openBook((Player) sender);
                 msg(sender, "open-self", null, null);
-            } catch (Exception e) {
-                msg(sender, "open-failed", "%player%", sender.getName());
-            }
+            } catch (Exception e) { msg(sender, "open-failed", "%player%", sender.getName()); }
             return true;
         }
-
         if (sub.equals("reset")) {
             if (!requirePerm(sender, "minestormjoinbook.reset")) return true;
             if (args.length < 2) { msg(sender, "invalid-usage", "%usage%", msgRaw("usage-reset")); return true; }
@@ -519,7 +447,6 @@ public final class MineStormJoinBookPlugin extends JavaPlugin implements Listene
             }
             return true;
         }
-
         if (sub.equals("resetall")) {
             if (!requirePerm(sender, "minestormjoinbook.resetall")) return true;
             int count = this.seen.size();
@@ -529,7 +456,6 @@ public final class MineStormJoinBookPlugin extends JavaPlugin implements Listene
             msg(sender, "resetall-success", "%count%", String.valueOf(count));
             return true;
         }
-
         if (sub.equals("list")) {
             if (!requirePerm(sender, "minestormjoinbook.list")) return true;
             if (this.seen.isEmpty()) { msg(sender, "list-empty", null, null); return true; }
@@ -541,7 +467,6 @@ public final class MineStormJoinBookPlugin extends JavaPlugin implements Listene
             }
             return true;
         }
-
         if (sub.equals("info")) {
             if (!requirePerm(sender, "minestormjoinbook.info")) return true;
             msg(sender, "info-header", "%version%", getDescription().getVersion());
@@ -552,7 +477,6 @@ public final class MineStormJoinBookPlugin extends JavaPlugin implements Listene
             msg(sender, "info-delay", "%delay%", String.valueOf(getConfig().getLong("open-delay-ticks", 20L)));
             return true;
         }
-
         msg(sender, "unknown-command", null, null);
         return true;
     }
@@ -593,12 +517,10 @@ public final class MineStormJoinBookPlugin extends JavaPlugin implements Listene
     private org.bukkit.inventory.ItemStack buildBook() {
         NBTTagList pages = new NBTTagList();
         for (String page : buildPages()) pages.add((NBTBase) new NBTTagString(page));
-
         NBTTagCompound tag = new NBTTagCompound();
         tag.setString("title", color(gui.getString("book.title", "&6Gamemodes")));
         tag.setString("author", color(gui.getString("book.author", "Server")));
         tag.set("pages", (NBTBase) pages);
-
         ItemStack nms = CraftItemStack.asNMSCopy(new org.bukkit.inventory.ItemStack(Material.WRITTEN_BOOK));
         nms.setTag(tag);
         return CraftItemStack.asBukkitCopy(nms);
@@ -608,7 +530,6 @@ public final class MineStormJoinBookPlugin extends JavaPlugin implements Listene
         String header = color(gui.getString("book.header", "&6&lWELCOME"));
         String subtitle = color(gui.getString("book.subtitle", "&7Choose a gamemode:"));
         String format = gui.getString("book.button-format", "&0&r%display%");
-
         List<String> buttons = new ArrayList<String>();
         ConfigurationSection modes = gui.getConfigurationSection("gamemodes");
         if (modes != null) {
@@ -624,21 +545,18 @@ public final class MineStormJoinBookPlugin extends JavaPlugin implements Listene
                 buttons.add(button(text, command, hover));
             }
         }
-
         List<String> pages = new ArrayList<String>();
-        int perPage = ENTRIES_PER_PAGE;
-        int total = Math.max(1, (buttons.size() + perPage - 1) / perPage);
+        int total = Math.max(1, (buttons.size() + ENTRIES_PER_PAGE - 1) / ENTRIES_PER_PAGE);
         for (int p = 0; p < total; p++) {
             StringBuilder sb = new StringBuilder("[\"\"");
             if (p == 0) {
                 sb.append(",{\"text\":\"").append(esc(header + "\n")).append("\"}");
                 sb.append(",{\"text\":\"").append(esc(subtitle + "\n\n")).append("\"}");
             }
-            int from = p * perPage;
-            int to = Math.min(buttons.size(), from + perPage);
-            if (buttons.isEmpty()) {
+            int from = p * ENTRIES_PER_PAGE;
+            int to = Math.min(buttons.size(), from + ENTRIES_PER_PAGE);
+            if (buttons.isEmpty())
                 sb.append(",{\"text\":\"").append(esc("&cNo gamemodes configured.")).append("\"}");
-            }
             for (int i = from; i < to; i++) {
                 sb.append(",").append(buttons.get(i));
                 sb.append(",{\"text\":\"\\n\"}");
@@ -654,10 +572,9 @@ public final class MineStormJoinBookPlugin extends JavaPlugin implements Listene
         sb.append("{\"text\":\"").append(esc(text)).append("\"");
         sb.append(",\"clickEvent\":{\"action\":\"run_command\",\"value\":\"")
                 .append(esc(command)).append("\"}");
-        if (hover != null && !hover.isEmpty()) {
+        if (hover != null && !hover.isEmpty())
             sb.append(",\"hoverEvent\":{\"action\":\"show_text\",\"value\":\"")
                     .append(esc(hover)).append("\"}");
-        }
         sb.append("}");
         return sb.toString();
     }
@@ -690,9 +607,7 @@ public final class MineStormJoinBookPlugin extends JavaPlugin implements Listene
         sender.sendMessage(color(raw));
     }
 
-    private String msgRaw(String key) {
-        return messages.getString(key, "");
-    }
+    private String msgRaw(String key) { return messages.getString(key, ""); }
 
     private static String color(String s) {
         if (s == null) return "";
@@ -715,9 +630,9 @@ public final class MineStormJoinBookPlugin extends JavaPlugin implements Listene
 }
 '''
 
-# ------------------------------------------------------------
-# GitHub Actions workflow
-# ------------------------------------------------------------
+# ============================================================
+# GitHub Actions workflow — uses BuildTools to produce spigot 1.8.8
+# ============================================================
 WORKFLOW = """name: Build MineStormJoinBook
 
 on:
@@ -728,14 +643,70 @@ on:
   workflow_dispatch:
 
 jobs:
+  # -----------------------------------------------------------
+  # Stage 1: build Spigot 1.8.8 once with JDK 8 + BuildTools
+  # -----------------------------------------------------------
+  spigot:
+    name: Build Spigot 1.8.8 with BuildTools
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 8
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '8'
+          cache: maven
+
+      - name: Cache Spigot 1.8.8 build
+        id: spigot-cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.m2/repository/org/spigotmc
+            ~/.m2/repository/net/md-5
+            ~/.m2/repository/org/bukkit
+            ~/BuildTools
+          key: spigot-1.8.8-v1
+
+      - name: Install git config (BuildTools needs it)
+        run: |
+          git config --global user.email "ci@github.com"
+          git config --global user.name "CI"
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
+      - name: Download BuildTools
+        if: steps.spigot-cache.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p ~/BuildTools
+          cd ~/BuildTools
+          curl -fL -o BuildTools.jar \\
+            https://hub.spigotmc.org/jenkins/job/BuildTools/lastSuccessfulBuild/artifact/target/BuildTools.jar
+
+      - name: Build Spigot 1.8.8
+        if: steps.spigot-cache.outputs.cache-hit != 'true'
+        run: |
+          cd ~/BuildTools
+          java -jar BuildTools.jar --rev 1.8.8 --compile-if-changed=false 2>&1 | tail -n 60
+
+      - name: Verify Spigot installed
+        run: |
+          ls -la ~/.m2/repository/org/spigotmc/spigot/1.8.8-R0.1-SNAPSHOT/ || true
+          ls -la ~/.m2/repository/org/spigotmc/spigot-api/1.8.8-R0.1-SNAPSHOT/ || true
+
+  # -----------------------------------------------------------
+  # Stage 2: build plugin on JDK 8, 17, 21, 25
+  # -----------------------------------------------------------
   build:
-    name: Build on JDK ${{ matrix.java }}
+    name: Build plugin on JDK ${{ matrix.java }}
+    needs: spigot
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
         java: [ '8', '17', '21', '25' ]
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -743,15 +714,24 @@ jobs:
       - name: Set up JDK ${{ matrix.java }}
         uses: actions/setup-java@v4
         with:
-          distribution: 'temurin'
+          distribution: temurin
           java-version: ${{ matrix.java }}
-          cache: 'maven'
+          cache: maven
+
+      - name: Restore Spigot 1.8.8 from cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.m2/repository/org/spigotmc
+            ~/.m2/repository/net/md-5
+            ~/.m2/repository/org/bukkit
+          key: spigot-1.8.8-v1
 
       - name: Show Java version
         run: java -version
 
       - name: Build with Maven
-        run: mvn -B -U -DskipTests clean package
+        run: mvn -B -o -DskipTests clean package || mvn -B -DskipTests clean package
 
       - name: Upload artifact (JDK ${{ matrix.java }})
         uses: actions/upload-artifact@v4
@@ -761,122 +741,78 @@ jobs:
           if-no-files-found: error
 """
 
-# ------------------------------------------------------------
+# ============================================================
 # README
-# ------------------------------------------------------------
+# ============================================================
 README = """# MineStormJoinBook
 
-Shows a clickable **GUI book** on join. Built for **Spigot 1.8.x**.
-
-**Created by Muvixo.**
+Clickable GUI book on join for Spigot **1.8.x**. **Created by Muvixo.**
 
 ## Features
-- Opens a written book GUI on join (default: every join)
-- Clickable buttons that run commands + hover tooltips
+- Book GUI on join (default: every join)
+- Clickable buttons + hover tooltips
 - `/minestormjoinbook` (`/msjb`, `/joinbook`) admin command
 - LuckPerms-friendly permissions; **OP = full perm bypass**
-- `messages.yml` + `gui.yml` for full text customization
-- `/msjb creator` prints `Created by Muvixo`
-- Auto-built on GitHub Actions for JDK 8, 17, 21, 25
+- `messages.yml` + `gui.yml` fully customizable
+- `/msjb creator` → `Created by Muvixo`
+- Built on GitHub Actions for **JDK 8, 17, 21, 25**
 
-## Commands
-| Command | Description |
-|---|---|
-| `/msjb help` | Show help |
-| `/msjb reload` | Reload config, messages.yml, gui.yml |
-| `/msjb open [player]` | Open the book (self or other) |
-| `/msjb reset <player>` | Reset a player |
-| `/msjb resetall` | Reset all tracked players |
-| `/msjb list` | List players who've seen the book |
-| `/msjb info` | Plugin info |
-| `/msjb creator` | Show plugin creator |
-
-## Permissions
-| Node | Default |
-|---|---|
-| `minestormjoinbook.admin` | op |
-| `minestormjoinbook.reload` | op |
-| `minestormjoinbook.open` | true |
-| `minestormjoinbook.open.other` | op |
-| `minestormjoinbook.reset` | op |
-| `minestormjoinbook.resetall` | op |
-| `minestormjoinbook.list` | op |
-| `minestormjoinbook.info` | true |
-| `minestormjoinbook.creator` | true |
-| `minestormjoinbook.see` | true |
-
-## Build locally
+## Build (local)
+You must have Spigot 1.8.8 in your local Maven repo. Easiest way:
 ```bash
+java -jar BuildTools.jar --rev 1.8.8
 mvn clean package
 ```
 Output: `target/MineStormJoinBook-1.0.0.jar`
 
-## GitHub Actions
-Push to GitHub; workflow builds for JDK 8, 17, 21, 25 and uploads jars as
-artifacts.
+## Build (GitHub Actions)
+Just push. The workflow:
+1. Builds Spigot 1.8.8 once with **BuildTools** (cached between runs).
+2. Builds the plugin on **JDK 8, 17, 21, 25** and uploads a jar for each.
+
+## Why BuildTools?
+Spigot doesn't distribute prebuilt 1.8.8 jars publicly, and the community
+mirrors that used to host them are no longer reliably resolvable from
+GitHub-hosted runners. BuildTools produces the exact artifact locally,
+and we cache it so the CI stays fast.
 """
 
-GITIGNORE = "target/\n*.iml\n.idea/\n.settings/\n.classpath\n.project\n"
+GITIGNORE = "target/\n*.iml\n.idea/\n.settings/\n.classpath\n.project\nBuildTools/\n"
 
-# ------------------------------------------------------------
+# ============================================================
 # Writer
-# ------------------------------------------------------------
-def ensure_dir(path):
-    d = os.path.dirname(path)
-    if d and not os.path.isdir(d):
-        os.makedirs(d, exist_ok=True)
-
-def write_file(path, content, overwrite=True):
-    full = os.path.join(ROOT, path) if ROOT != "." else path
-    ensure_dir(full)
-    if os.path.exists(full) and not overwrite:
-        print("  = skip (exists):", full)
-        return
+# ============================================================
+def write(path, content):
+    full = path if ROOT == "." else os.path.join(ROOT, path)
+    os.makedirs(os.path.dirname(full) or ".", exist_ok=True)
     with open(full, "w", encoding="utf-8", newline="\n") as f:
         f.write(content)
-    print("  + wrote:", full)
-
-def remove_old_nested_package():
-    """Remove old com/example/joinbook directory if present."""
-    old = os.path.join("src", "main", "java", "com", "example", "joinbook")
-    if os.path.isdir(old):
-        import shutil
-        shutil.rmtree(old)
-        print("  - removed old package dir:", old)
+    print("  +", full)
 
 def main():
     print("Patching project in:", os.path.abspath(ROOT))
-    print()
 
-    # 1. Remove old package dir if present
-    remove_old_nested_package()
+    # Remove legacy package dir from earlier attempts
+    legacy = os.path.join("src", "main", "java", "com", "example")
+    if os.path.isdir(legacy):
+        shutil.rmtree(legacy)
+        print("  - removed legacy package:", legacy)
 
-    # 2. pom.xml (overwrite to fix Spigot repo issue)
-    write_file("pom.xml", POM_XML, overwrite=True)
-
-    # 3. resources
-    write_file(os.path.join(RES, "plugin.yml"), PLUGIN_YML)
-    write_file(os.path.join(RES, "config.yml"), CONFIG_YML)
-    write_file(os.path.join(RES, "messages.yml"), MESSAGES_YML)
-    write_file(os.path.join(RES, "gui.yml"), GUI_YML)
-
-    # 4. Java source
-    write_file(os.path.join(SRC, "MineStormJoinBookPlugin.java"), JAVA_SRC)
-
-    # 5. GitHub Actions workflow
-    write_file(os.path.join(WF, "build.yml"), WORKFLOW)
-
-    # 6. README + gitignore
-    write_file("README.md", README, overwrite=False)
-    write_file(".gitignore", GITIGNORE, overwrite=False)
+    write("pom.xml", POM_XML)
+    write(os.path.join(RES, "plugin.yml"), PLUGIN_YML)
+    write(os.path.join(RES, "config.yml"), CONFIG_YML)
+    write(os.path.join(RES, "messages.yml"), MESSAGES_YML)
+    write(os.path.join(RES, "gui.yml"), GUI_YML)
+    write(os.path.join(SRC, "MineStormJoinBookPlugin.java"), JAVA_SRC)
+    write(os.path.join(WF, "build.yml"), WORKFLOW)
+    write("README.md", README)
+    write(".gitignore", GITIGNORE)
 
     print()
-    print("Done. Now run:")
-    print("    git add .")
-    print('    git commit -m "fix: use community Spigot mirror + add configs"')
-    print("    git push")
-    print()
-    print("GitHub Actions will build for JDK 8, 17, 21, 25.")
+    print("Done.")
+    print("  git add .")
+    print('  git commit -m "ci: build spigot 1.8.8 with BuildTools, cache it, then build plugin"')
+    print("  git push")
 
 if __name__ == "__main__":
     main()

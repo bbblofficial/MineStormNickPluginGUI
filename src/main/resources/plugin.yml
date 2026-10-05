@@ -11,7 +11,7 @@ commands:
     aliases: [msjb, joinbook]
 permissions:
   minestormjoinbook.admin:
-    description: Full admin access (all subcommands)
+    description: Full admin access
     default: op
     children:
       minestormjoinbook.reload: true
@@ -22,22 +22,12 @@ permissions:
       minestormjoinbook.list: true
       minestormjoinbook.info: true
       minestormjoinbook.creator: true
-  minestormjoinbook.reload:
-    default: op
-  minestormjoinbook.open:
-    default: true
-  minestormjoinbook.open.other:
-    default: op
-  minestormjoinbook.reset:
-    default: op
-  minestormjoinbook.resetall:
-    default: op
-  minestormjoinbook.list:
-    default: op
-  minestormjoinbook.info:
-    default: true
-  minestormjoinbook.creator:
-    default: true
-  minestormjoinbook.see:
-    description: Player receives the join book
-    default: true
+  minestormjoinbook.reload: { default: op }
+  minestormjoinbook.open: { default: true }
+  minestormjoinbook.open.other: { default: op }
+  minestormjoinbook.reset: { default: op }
+  minestormjoinbook.resetall: { default: op }
+  minestormjoinbook.list: { default: op }
+  minestormjoinbook.info: { default: true }
+  minestormjoinbook.creator: { default: true }
+  minestormjoinbook.see: { default: true }

@@ -8,14 +8,70 @@ on:
   workflow_dispatch:
 
 jobs:
+  # -----------------------------------------------------------
+  # Stage 1: build Spigot 1.8.8 once with JDK 8 + BuildTools
+  # -----------------------------------------------------------
+  spigot:
+    name: Build Spigot 1.8.8 with BuildTools
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 8
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '8'
+          cache: maven
+
+      - name: Cache Spigot 1.8.8 build
+        id: spigot-cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.m2/repository/org/spigotmc
+            ~/.m2/repository/net/md-5
+            ~/.m2/repository/org/bukkit
+            ~/BuildTools
+          key: spigot-1.8.8-v1
+
+      - name: Install git config (BuildTools needs it)
+        run: |
+          git config --global user.email "ci@github.com"
+          git config --global user.name "CI"
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
+      - name: Download BuildTools
+        if: steps.spigot-cache.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p ~/BuildTools
+          cd ~/BuildTools
+          curl -fL -o BuildTools.jar \
+            https://hub.spigotmc.org/jenkins/job/BuildTools/lastSuccessfulBuild/artifact/target/BuildTools.jar
+
+      - name: Build Spigot 1.8.8
+        if: steps.spigot-cache.outputs.cache-hit != 'true'
+        run: |
+          cd ~/BuildTools
+          java -jar BuildTools.jar --rev 1.8.8 --compile-if-changed=false 2>&1 | tail -n 60
+
+      - name: Verify Spigot installed
+        run: |
+          ls -la ~/.m2/repository/org/spigotmc/spigot/1.8.8-R0.1-SNAPSHOT/ || true
+          ls -la ~/.m2/repository/org/spigotmc/spigot-api/1.8.8-R0.1-SNAPSHOT/ || true
+
+  # -----------------------------------------------------------
+  # Stage 2: build plugin on JDK 8, 17, 21, 25
+  # -----------------------------------------------------------
   build:
-    name: Build on JDK ${{ matrix.java }}
+    name: Build plugin on JDK ${{ matrix.java }}
+    needs: spigot
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
         java: [ '8', '17', '21', '25' ]
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -23,15 +79,24 @@ jobs:
       - name: Set up JDK ${{ matrix.java }}
         uses: actions/setup-java@v4
         with:
-          distribution: 'temurin'
+          distribution: temurin
           java-version: ${{ matrix.java }}
-          cache: 'maven'
+          cache: maven
+
+      - name: Restore Spigot 1.8.8 from cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.m2/repository/org/spigotmc
+            ~/.m2/repository/net/md-5
+            ~/.m2/repository/org/bukkit
+          key: spigot-1.8.8-v1
 
       - name: Show Java version
         run: java -version
 
       - name: Build with Maven
-        run: mvn -B -U -DskipTests clean package
+        run: mvn -B -o -DskipTests clean package || mvn -B -DskipTests clean package
 
       - name: Upload artifact (JDK ${{ matrix.java }})
         uses: actions/upload-artifact@v4

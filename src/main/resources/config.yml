@@ -1,17 +1,5 @@
-# MineStormJoinBook main configuration
-# Behavior only. Text is in messages.yml and gui.yml.
-
-# false = show on every join; true = show only once per player
 only-once: false
-
-# Delay in ticks before opening. 20 ticks = 1 second
 open-delay-ticks: 20
-
-# Sound on open. "" disables. 1.8 example: ITEM_BOOK_PAGE_TURN
 open-sound: "ITEM_BOOK_PAGE_TURN"
-
-# Manual /msjb open ignores only-once
 manual-open-ignores-once: true
-
-# Hide book from players without minestormjoinbook.see
 respect-see-permission: true

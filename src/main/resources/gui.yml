@@ -1,5 +1,3 @@
-# MineStormJoinBook GUI (written book) configuration
-
 book:
   title: "&6Gamemodes"
   author: "Server"
@@ -11,40 +9,40 @@ gamemodes:
   survival:
     display: "&a&lSurvival"
     command: "server survival"
-    hover: "&7Join the &aSurvival &7server!"
+    hover: "&7Join &aSurvival&7!"
   skyblock:
     display: "&b&lSkyblock"
     command: "server skyblock"
-    hover: "&7Join the &bSkyblock &7server!"
+    hover: "&7Join &bSkyblock&7!"
   creative:
     display: "&e&lCreative"
     command: "server creative"
-    hover: "&7Join the &eCreative &7server!"
+    hover: "&7Join &eCreative&7!"
   pvp:
     display: "&c&lPvP Arena"
     command: "server pvp"
-    hover: "&7Join the &cPvP Arena &7server!"
+    hover: "&7Join &cPvP&7!"
   minigames:
     display: "&d&lMinigames"
     command: "server minigames"
-    hover: "&7Join the &dMinigames &7server!"
+    hover: "&7Join &dMinigames&7!"
   parkour:
     display: "&6&lParkour"
     command: "server parkour"
-    hover: "&7Join the &6Parkour &7server!"
+    hover: "&7Join &6Parkour&7!"
   factions:
     display: "&4&lFactions"
     command: "server factions"
-    hover: "&7Join the &4Factions &7server!"
+    hover: "&7Join &4Factions&7!"
   prison:
     display: "&8&lPrison"
     command: "server prison"
-    hover: "&7Join the &8Prison &7server!"
+    hover: "&7Join &8Prison&7!"
   bedwars:
     display: "&5&lBedWars"
     command: "server bedwars"
-    hover: "&7Join the &5BedWars &7server!"
+    hover: "&7Join &5BedWars&7!"
   skywars:
     display: "&9&lSkyWars"
     command: "server skywars"
-    hover: "&7Join the &9SkyWars &7server!"
+    hover: "&7Join &9SkyWars&7!"

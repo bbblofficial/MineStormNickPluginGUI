@@ -1,42 +1,30 @@
-# MineStormJoinBook messages
-# Placeholders: %player% %sender% %count% %prefix% %version% %author% %error%
-
 prefix: "&8[&6MineStorm&8] &r"
-
 no-permission: "%prefix%&cYou don't have permission."
 player-only: "%prefix%&cOnly players can use this."
 player-not-found: "%prefix%&cPlayer &e%player% &cnot found."
 unknown-command: "%prefix%&cUnknown subcommand. Try &e/msjb help&c."
 invalid-usage: "%prefix%&cUsage: &e%usage%"
-
 reload-success: "%prefix%&aConfiguration reloaded."
 reload-failed: "%prefix%&cReload failed: &e%error%"
-
 open-self: "%prefix%&aOpening the book GUI..."
 open-other: "%prefix%&aOpened the book for &e%player%&a."
 open-target: "%prefix%&aA book GUI was opened for you."
 open-failed: "%prefix%&cCould not open the book for &e%player%&c."
-
 reset-success: "%prefix%&e%player% &awill see the book again."
 reset-not-seen: "%prefix%&e%player% &ehas not seen it yet."
 resetall-success: "%prefix%&aReset &e%count% &aplayer(s)."
 resetall-empty: "%prefix%&eNo players to reset."
-
 list-header: "%prefix%&6Seen (&e%count%&6):"
 list-entry: "&8 - &e%player%"
 list-empty: "%prefix%&eNobody has seen the book yet."
-
 info-header: "%prefix%&6MineStormJoinBook &7v%version%"
 info-line: "&7Author: &e%author%"
 info-seen: "&7Tracked: &e%count%"
 info-once: "&7Only once: &e%once%"
 info-delay: "&7Delay: &e%delay% &7ticks"
-
 creator: "%prefix%&6Created by &e&lMuvixo"
-
 help-header: "%prefix%&6MineStormJoinBook commands:"
 help-line: "&e%usage% &7- %description%"
-
 usage-reload: "/msjb reload"
 usage-open: "/msjb open [player]"
 usage-reset: "/msjb reset <player>"
@@ -45,7 +33,6 @@ usage-list: "/msjb list"
 usage-info: "/msjb info"
 usage-creator: "/msjb creator"
 usage-help: "/msjb help"
-
 desc-reload: "Reload config, messages.yml and gui.yml"
 desc-open: "Open the book GUI (self or others)"
 desc-reset: "Reset a player"
