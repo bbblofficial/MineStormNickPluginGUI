@@ -1,0 +1,50 @@
+# MineStormJoinBook GUI (written book) configuration
+
+book:
+  title: "&6Gamemodes"
+  author: "Server"
+  header: "&6&lWELCOME"
+  subtitle: "&7Choose a gamemode:"
+  button-format: "&0&r%display%"
+
+gamemodes:
+  survival:
+    display: "&a&lSurvival"
+    command: "server survival"
+    hover: "&7Join the &aSurvival &7server!"
+  skyblock:
+    display: "&b&lSkyblock"
+    command: "server skyblock"
+    hover: "&7Join the &bSkyblock &7server!"
+  creative:
+    display: "&e&lCreative"
+    command: "server creative"
+    hover: "&7Join the &eCreative &7server!"
+  pvp:
+    display: "&c&lPvP Arena"
+    command: "server pvp"
+    hover: "&7Join the &cPvP Arena &7server!"
+  minigames:
+    display: "&d&lMinigames"
+    command: "server minigames"
+    hover: "&7Join the &dMinigames &7server!"
+  parkour:
+    display: "&6&lParkour"
+    command: "server parkour"
+    hover: "&7Join the &6Parkour &7server!"
+  factions:
+    display: "&4&lFactions"
+    command: "server factions"
+    hover: "&7Join the &4Factions &7server!"
+  prison:
+    display: "&8&lPrison"
+    command: "server prison"
+    hover: "&7Join the &8Prison &7server!"
+  bedwars:
+    display: "&5&lBedWars"
+    command: "server bedwars"
+    hover: "&7Join the &5BedWars &7server!"
+  skywars:
+    display: "&9&lSkyWars"
+    command: "server skywars"
+    hover: "&7Join the &9SkyWars &7server!"

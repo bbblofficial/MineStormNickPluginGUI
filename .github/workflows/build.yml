@@ -1,0 +1,41 @@
+name: Build MineStormJoinBook
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build on JDK ${{ matrix.java }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        java: [ '8', '17', '21', '25' ]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK ${{ matrix.java }}
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: ${{ matrix.java }}
+          cache: 'maven'
+
+      - name: Show Java version
+        run: java -version
+
+      - name: Build with Maven
+        run: mvn -B -U -DskipTests clean package
+
+      - name: Upload artifact (JDK ${{ matrix.java }})
+        uses: actions/upload-artifact@v4
+        with:
+          name: MineStormJoinBook-JDK${{ matrix.java }}
+          path: target/*.jar
+          if-no-files-found: error

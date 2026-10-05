@@ -1,0 +1,43 @@
+name: MineStormJoinBook
+version: 1.0.0
+main: com.muvixo.minestormjoinbook.MineStormJoinBookPlugin
+author: Muvixo
+description: Shows a clickable GUI book on join. Created by Muvixo.
+api-version: 1.8
+commands:
+  minestormjoinbook:
+    description: MineStormJoinBook admin command
+    usage: /minestormjoinbook <reload|open|reset|resetall|list|info|creator|help>
+    aliases: [msjb, joinbook]
+permissions:
+  minestormjoinbook.admin:
+    description: Full admin access (all subcommands)
+    default: op
+    children:
+      minestormjoinbook.reload: true
+      minestormjoinbook.open: true
+      minestormjoinbook.open.other: true
+      minestormjoinbook.reset: true
+      minestormjoinbook.resetall: true
+      minestormjoinbook.list: true
+      minestormjoinbook.info: true
+      minestormjoinbook.creator: true
+  minestormjoinbook.reload:
+    default: op
+  minestormjoinbook.open:
+    default: true
+  minestormjoinbook.open.other:
+    default: op
+  minestormjoinbook.reset:
+    default: op
+  minestormjoinbook.resetall:
+    default: op
+  minestormjoinbook.list:
+    default: op
+  minestormjoinbook.info:
+    default: true
+  minestormjoinbook.creator:
+    default: true
+  minestormjoinbook.see:
+    description: Player receives the join book
+    default: true
